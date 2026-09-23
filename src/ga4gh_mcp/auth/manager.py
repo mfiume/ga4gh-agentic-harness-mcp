@@ -65,6 +65,11 @@ class HostAuth:
     grant: str | None = None
     issuer: str | None = None
     resource: str | None = None
+    # True when the token/device endpoints came from operator config (explicit endpoints, or
+    # discovery against a configured ``issuer``). False when they were discovered from the
+    # service's own response (WWW-Authenticate realm, or its origin's .well-known), which the
+    # service controls: those endpoints never receive ``client_secret``.
+    endpoints_configured: bool = False
     extra: dict = field(default_factory=dict)
 
 
@@ -165,6 +170,7 @@ class AuthManager:
         host = host_of(url)
         ha = self.host_config(host)
         if ha.token_endpoint:
+            ha.endpoints_configured = True
             return ha
         # discover
         from urllib.parse import urlparse
@@ -177,6 +183,7 @@ class AuthManager:
         oidc = None
         if ha.issuer:
             oidc = await discover_oidc(self._http, ha.issuer)
+            ha.endpoints_configured = bool(oidc)
         if not oidc:
             req = await discover_auth_requirement(self._http, url, artifact)
             oidc = req.get("oidc")
@@ -201,7 +208,7 @@ class AuthManager:
         if not ha.device_authorization_endpoint:
             raise AuthError(f"No device_authorization_endpoint discovered for {ha.host}.")
         data = {"client_id": ha.client_id, "scope": ha.scope or "openid offline_access"}
-        if ha.client_secret:
+        if ha.client_secret and ha.endpoints_configured:
             data["client_secret"] = ha.client_secret
         if ha.resource:
             data["resource"] = ha.resource
@@ -226,7 +233,7 @@ class AuthManager:
         """Poll the token endpoint until the user authorizes (blocking, CLI-friendly)."""
         ha = await self._endpoints_for(url, artifact)
         data = {"grant_type": DEVICE_CODE_GRANT, "device_code": device_code, "client_id": ha.client_id}
-        if ha.client_secret:
+        if ha.client_secret and ha.endpoints_configured:
             data["client_secret"] = ha.client_secret
         deadline = time.monotonic() + timeout
         wait = interval
@@ -253,6 +260,12 @@ class AuthManager:
         if not (ha.client_id and ha.client_secret and ha.token_endpoint):
             raise AuthError(
                 f"client-credentials requires client_id, client_secret and token_endpoint for {ha.host}"
+            )
+        if not ha.endpoints_configured:
+            raise AuthError(
+                f"refusing to send client_secret for {ha.host} to a token endpoint discovered from "
+                f"the service's own response ({ha.token_endpoint}); configure "
+                f"hosts.{ha.host}.oauth.token_endpoint or .issuer in the YAML config"
             )
         data = {
             "grant_type": "client_credentials",

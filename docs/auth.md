@@ -39,6 +39,11 @@ This provokes a `WWW-Authenticate` challenge on a protected endpoint and runs OI
 `.well-known` discovery, reporting `requires_auth`, the parsed challenge, discovered
 token/device/authorization endpoints, and the recommended flow.
 
+Discovery results are informational. Endpoints learned from a service's own response (its
+`WWW-Authenticate` realm or its origin's `.well-known`) never receive a `client_secret`:
+client-credentials requires `hosts.<host>.oauth.token_endpoint` or `.issuer` in the YAML
+config, and device-code against discovered endpoints runs as a public client (no secret).
+
 ## Flows
 
 - **No-auth / public** — nothing to do. ✅ testable headless.
