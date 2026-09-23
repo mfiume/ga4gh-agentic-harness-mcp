@@ -12,7 +12,7 @@ license = "Apache-2.0"
 authors = [{ name = "Marc Fiume" }]
 keywords = ["ga4gh", "mcp", "genomics", "drs", "wes", "trs", "registry", "bioinformatics"]
 dependencies = [
-    "mcp[cli]>=1.4.0",
+    "mcp[cli]>=1.28.1,<2",
     "httpx>=0.27.0",
     "pydantic>=2.6.0",
     "pydantic-settings>=2.2.0",
