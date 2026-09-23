@@ -3,13 +3,14 @@ service-info and an authenticated request passthrough."""
 
 from __future__ import annotations
 
+from ..annotations import READ_LOCAL, READ_REMOTE, annotations
 from ..context import ctx
 from ..errors import ERR_UPSTREAM, err, ok, safe_tool
 from ..serviceinfo import fetch_service_info
 
 
 def register(mcp) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def service_get_info(service_id_or_url: str, artifact: str | None = None) -> dict:
         """Fetch a GA4GH service-info document for any service (registry id or URL).
@@ -52,7 +53,10 @@ def register(mcp) -> None:
                        **{k: v for k, v in payload.items() if k != "service_info"})
         return ok(payload, warnings=warnings or None)
 
-    @mcp.tool()
+    write_ok = ctx().settings.allow_write_methods
+
+    @mcp.tool(annotations=(annotations(read_only=False, destructive=True, idempotent=False)
+                           if write_ok else READ_REMOTE))
     @safe_tool
     async def service_request(
         service_id_or_url: str,
@@ -67,12 +71,18 @@ def register(mcp) -> None:
         A power tool for endpoints without a specialized wrapper. ``path`` is
         appended to the service's normalized base URL (e.g. "/objects/{id}" for
         DRS, "/tools" for TRS). Auth headers are attached automatically based on
-        configured/cached credentials for the host. Only GET and POST are allowed.
+        configured/cached credentials for the host. GET only, unless the operator set
+        GA4GH_MCP_ALLOW_WRITE_METHODS=true, which also allows POST.
         """
         c = ctx()
         method = method.upper()
         if method not in ("GET", "POST"):
             return err("bad_input", "only GET and POST are supported")
+        if method != "GET" and not c.settings.allow_write_methods:
+            return err("bad_input",
+                       f"{method} is disabled: service_request is read-only (GET) by default. "
+                       "State-changing requests (e.g. WES/TES submit or cancel) must be enabled "
+                       "by the server operator with GA4GH_MCP_ALLOW_WRITE_METHODS=true.")
         resolved = await c.resolve(service_id_or_url, artifact)
         from ..normalize import normalize_base_url
 
@@ -99,7 +109,7 @@ def register(mcp) -> None:
                        if res.status else (res.error or "request failed"), **payload)
         return ok(payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_LOCAL)
     @safe_tool
     async def list_supported_service_types() -> dict:
         """List the GA4GH service types this server understands, their specs, and which

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 
+from ..annotations import READ_REMOTE
 from ..context import ctx
 from ..errors import ERR_NOT_FOUND, ToolError, err, ok, safe_tool
 from ..normalize import host_of, normalize_environment, parse_version
@@ -12,7 +13,7 @@ from ..serviceinfo import probe_liveness
 
 
 def register(mcp) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def registry_list_services(
         artifact: str | None = None,
@@ -79,7 +80,7 @@ def register(mcp) -> None:
                   filters={"artifact": artifact, "organization": organization,
                            "version": version, "environment": environment})
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def registry_get_service(service_id: str) -> dict:
         """Get full details for a single registered service by its registry id.
@@ -99,7 +100,7 @@ def register(mcp) -> None:
         data["raw"] = svc.model_dump(exclude_none=True)
         return ok(data)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def registry_search(query: str, kind: str = "all", limit: int = 25) -> dict:
         """Free-text search across registered services and implementations.
@@ -127,7 +128,7 @@ def register(mcp) -> None:
         counts = {k: len(v) for k, v in results.items()}
         return ok(results, counts=counts, query=query)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def registry_list_service_types() -> dict:
         """List the distinct GA4GH service types (artifact + version) present in the registry,
@@ -155,7 +156,7 @@ def register(mcp) -> None:
             })
         return ok(type_list, artifact_counts=counts)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def registry_list_implementations(artifact: str | None = None, limit: int = 50) -> dict:
         """List software implementations (codebases) of GA4GH standards from the registry.
@@ -169,14 +170,14 @@ def register(mcp) -> None:
                      if not art or (i.type.artifact if i.type else "").lower() == art]
         return ok(summaries[:limit], total=len(summaries))
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def registry_service_info() -> dict:
         """Return the Implementation Registry's own GA4GH service-info document."""
         c = ctx()
         return ok(await c.registry.service_info())
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def registry_check_health(service_id_or_url: str, artifact: str | None = None) -> dict:
         """Live health/liveness check of one registered service (or raw URL).

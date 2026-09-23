@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from ..annotations import READ_REMOTE
 from ..context import ctx
 from ..errors import ok, safe_tool
 
 
 def register(mcp) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def trs_list_tools(service_id_or_url: str, tool_class: str | None = None,
                              organization: str | None = None, limit: int = 20) -> dict:
@@ -22,7 +23,7 @@ def register(mcp) -> None:
                                       organization=organization, limit=limit)
         return ok(data)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def trs_get_tool(service_id_or_url: str, tool_id: str) -> dict:
         """Get details of a specific TRS tool including its versions and container images."""

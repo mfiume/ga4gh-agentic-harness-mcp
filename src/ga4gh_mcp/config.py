@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     def bearer_host_set(self) -> set[str]:
         return {h.strip().lower() for h in self.bearer_hosts.split(",") if h.strip()}
 
+    # service_request sends GET only unless this is true (GA4GH_MCP_ALLOW_WRITE_METHODS).
+    # POST can submit or cancel WES runs / TES tasks with credentials attached, so it is an
+    # operator decision, not something the model can reach by choosing a method.
+    allow_write_methods: bool = False
+
     # Optional path to a YAML auth config (per-host tokens / OAuth clients).
     # Defaults to <config_home>/config.yaml when present.
     config_file: str | None = None

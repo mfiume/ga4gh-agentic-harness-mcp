@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from ..annotations import READ_REMOTE
 from ..context import ctx
 from ..errors import ERR_NOT_FOUND, ToolError, ok, safe_tool
 
 
 def register(mcp) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def drs_get_object(service_id_or_url: str, object_id: str, expand: bool = False) -> dict:
         """Get DRS object metadata: size, checksums, MIME type, and access methods.
@@ -22,7 +23,7 @@ def register(mcp) -> None:
         data = await c.drs.get_object(resolved.url, object_id, expand=expand)
         return ok(data)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def drs_get_access_url(service_id_or_url: str, object_id: str,
                                  access_id: str | None = None) -> dict:
@@ -37,7 +38,7 @@ def register(mcp) -> None:
         data = await c.drs.get_access_url(resolved.url, object_id, access_id)
         return ok(data)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def drs_resolve_curie(curie: str, expand: bool = False) -> dict:
         """Resolve a DRS CURIE (``prefix:accession``) using the registry's curiePrefix map.

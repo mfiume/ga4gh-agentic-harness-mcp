@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from ..annotations import READ_LOCAL, READ_REMOTE, annotations
 from ..auth.manager import AuthError, host_env_slug
 from ..context import ctx
 from ..errors import err, ok, safe_tool
@@ -14,7 +15,7 @@ _BG_TASKS: set[asyncio.Task] = set()
 
 
 def register(mcp) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READ_LOCAL)
     @safe_tool
     async def auth_status(service_id_or_url: str | None = None) -> dict:
         """Show authentication status: which hosts have static/OAuth tokens configured,
@@ -30,7 +31,7 @@ def register(mcp) -> None:
                 url = service_id_or_url
         return ok(c.auth.status(url))
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_REMOTE)
     @safe_tool
     async def auth_discover(service_id_or_url: str, artifact: str | None = None) -> dict:
         """Discover what authentication a service requires and how to obtain it.
@@ -46,7 +47,7 @@ def register(mcp) -> None:
         result["env_token_var"] = f"GA4GH_MCP_TOKEN_{host_env_slug(host_of(resolved.url))}"
         return ok(result)
 
-    @mcp.tool()
+    @mcp.tool(annotations=annotations(read_only=False, open_world=False))
     @safe_tool
     async def auth_set_token(service_id_or_url: str, token: str) -> dict:
         """Set a static bearer token for a service's host for this session.
@@ -63,7 +64,7 @@ def register(mcp) -> None:
         host = c.auth.set_static_token(target, token)
         return ok({"host": host, "message": f"static bearer token set for {host} (session only)"})
 
-    @mcp.tool()
+    @mcp.tool(annotations=annotations(read_only=False, idempotent=False))
     @safe_tool
     async def auth_login(service_id_or_url: str, artifact: str | None = None) -> dict:
         """Begin an OAuth 2.0 device-code login for a service (interactive).
@@ -106,7 +107,7 @@ def register(mcp) -> None:
                        "call auth_status to confirm.",
         })
 
-    @mcp.tool()
+    @mcp.tool(annotations=annotations(read_only=False, destructive=True, open_world=False))
     @safe_tool
     async def auth_revoke(service_id_or_url: str | None = None) -> dict:
         """Revoke cached tokens for a host (or all hosts if omitted)."""

@@ -68,7 +68,7 @@ uvx --from git+https://github.com/mfiume/ga4gh-mcp-service ga4gh-mcp tools
 | Group | Tools |
 |---|---|
 | **Registry** | `registry_list_services`, `registry_get_service`, `registry_search`, `registry_list_service_types`, `registry_list_implementations`, `registry_service_info`, `registry_check_health` |
-| **Generic** | `service_get_info`, `service_request`, `list_supported_service_types` |
+| **Generic** | `service_get_info`, `service_request` (GET only unless `GA4GH_MCP_ALLOW_WRITE_METHODS=true`), `list_supported_service_types` |
 | **DRS** | `drs_get_object`, `drs_get_access_url`, `drs_resolve_curie` |
 | **TRS** | `trs_list_tools`, `trs_get_tool` |
 | **WES** | `wes_get_service_info`, `wes_list_runs`, `wes_get_run` |
