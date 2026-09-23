@@ -31,15 +31,15 @@ class TokenStore:
         self._loaded = True
 
     def _save(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        # Created private from the start (O_CREAT with 0600) rather than written with the
+        # process umask and tightened afterwards.
+        self._path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         tmp = self._path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self._data, indent=2))
-        os.chmod(tmp, 0o600)
+        tmp.unlink(missing_ok=True)  # O_EXCL below: never reuse a pre-existing, looser file
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(self._data, indent=2))
         tmp.replace(self._path)
-        try:
-            os.chmod(self._path, 0o600)
-        except OSError:
-            pass
 
     def get(self, host: str) -> dict | None:
         self._load()
