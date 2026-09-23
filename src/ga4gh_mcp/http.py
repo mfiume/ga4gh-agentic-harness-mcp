@@ -30,16 +30,16 @@ def origin(url: httpx.URL) -> tuple[str, str, int | None]:
     return url.scheme, url.host.lower().rstrip("."), url.port or {"https": 443, "http": 80}.get(url.scheme)
 
 
-class RedirectRefused(Exception):
+class RedirectRefusedError(Exception):
     """A redirect would have re-sent the request body to a different origin."""
 
 
-class BlockedAddress(Exception):
+class BlockedAddressError(Exception):
     """The destination is, or resolves to, a non-global address and those are blocked."""
 
 
 async def ensure_public(url: httpx.URL) -> None:
-    """Raise :class:`BlockedAddress` if ``url``'s host is or resolves to a non-global IP.
+    """Raise :class:`BlockedAddressError` if ``url``'s host is or resolves to a non-global IP.
 
     An unresolvable name is left to the request itself, which then fails as a DNS error.
     """
@@ -55,7 +55,7 @@ async def ensure_public(url: httpx.URL) -> None:
         addrs = {ipaddress.ip_address(i[4][0].split("%", 1)[0]) for i in infos}
     for a in addrs:
         if not a.is_global:
-            raise BlockedAddress(
+            raise BlockedAddressError(
                 f"refused request to non-public address {a} ({host}); set "
                 f"GA4GH_MCP_BLOCK_PRIVATE_ADDRESSES=false to allow private destinations")
 
@@ -168,9 +168,9 @@ class AsyncHttp:
                     method, url, headers=req_headers, params=params, json=json, data=data,
                     timeout=timeout or self._timeout,
                 ), caller_headers=headers)
-            except (RedirectRefused, BlockedAddress) as exc:
+            except (RedirectRefusedError, BlockedAddressError) as exc:
                 elapsed = int((time.monotonic() - start) * 1000)
-                kind = KIND_CONNECT if isinstance(exc, BlockedAddress) else KIND_HTTP
+                kind = KIND_CONNECT if isinstance(exc, BlockedAddressError) else KIND_HTTP
                 logger.info("HTTP %s %s -> refused (%s)", method, url, exc)
                 return HttpResult(url=url, error=str(exc), error_kind=kind, elapsed_ms=elapsed)
             except Exception as exc:  # noqa: BLE001
@@ -237,7 +237,7 @@ class AsyncHttp:
             body = await nxt.aread()
             if origin(nxt.url) != start_origin:
                 if body:
-                    raise RedirectRefused(
+                    raise RedirectRefusedError(
                         f"refused {resp.status_code} redirect that would re-send the request "
                         f"body to a different origin ({nxt.url.scheme}://{nxt.url.host})")
                 for name in list(nxt.headers.keys()):
