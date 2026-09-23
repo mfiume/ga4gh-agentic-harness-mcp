@@ -20,6 +20,16 @@ import httpx
 logger = logging.getLogger("ga4gh_mcp.http")
 
 RETRYABLE_STATUS = {429, 502, 503, 504}
+MAX_REDIRECTS = 5
+
+
+def origin(url: httpx.URL) -> tuple[str, str, int | None]:
+    """(scheme, host, port) of a URL, as httpx will send it."""
+    return url.scheme, url.host.lower().rstrip("."), url.port or {"https": 443, "http": 80}.get(url.scheme)
+
+
+class RedirectRefused(Exception):
+    """A redirect would have re-sent the request body to a different origin."""
 
 # Error kinds returned in HttpResult.error_kind
 KIND_TIMEOUT = "timeout"
@@ -76,7 +86,9 @@ class AsyncHttp:
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
-                follow_redirects=True,
+                # Redirects are followed by ``_send`` so credentials and token-request bodies
+                # stay on the origin they were meant for.
+                follow_redirects=False,
                 timeout=self._timeout,
                 headers={"User-Agent": self._user_agent},
             )
@@ -122,10 +134,14 @@ class AsyncHttp:
 
         for attempt in range(attempts):
             try:
-                resp = await client.request(
+                resp = await self._send(client, client.build_request(
                     method, url, headers=req_headers, params=params, json=json, data=data,
                     timeout=timeout or self._timeout,
-                )
+                ), caller_headers=headers)
+            except RedirectRefused as exc:
+                elapsed = int((time.monotonic() - start) * 1000)
+                logger.info("HTTP %s %s -> refused redirect (%s)", method, url, exc)
+                return HttpResult(url=url, error=str(exc), error_kind=KIND_HTTP, elapsed_ms=elapsed)
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
                 kind, msg = self._classify(exc)
@@ -167,6 +183,35 @@ class AsyncHttp:
         kind, msg = self._classify(last_exc) if last_exc else (KIND_OTHER, "unknown error")
         return HttpResult(url=url, error=msg, error_kind=kind,
                           elapsed_ms=int((time.monotonic() - start) * 1000))
+
+    async def _send(self, client: httpx.AsyncClient, request: httpx.Request, *,
+                    caller_headers: dict[str, str] | None) -> httpx.Response:
+        """Send ``request`` and follow redirects without carrying credentials across origins.
+
+        Caller-supplied headers, ``Authorization`` and ``Cookie`` are dropped once a hop leaves
+        the original (scheme, host, port); a 307/308 that would re-send the body (a token
+        request with ``client_secret`` / ``device_code`` / ``refresh_token``) to another origin
+        is refused.
+        """
+        start_origin = origin(request.url)
+        drop = {k.lower() for k in (caller_headers or {})} | {"authorization", "cookie"}
+        for _ in range(MAX_REDIRECTS + 1):
+            resp = await client.send(request)
+            nxt = resp.next_request
+            if nxt is None:
+                return resp
+            await resp.aclose()
+            body = await nxt.aread()
+            if origin(nxt.url) != start_origin:
+                if body:
+                    raise RedirectRefused(
+                        f"refused {resp.status_code} redirect that would re-send the request "
+                        f"body to a different origin ({nxt.url.scheme}://{nxt.url.host})")
+                for name in list(nxt.headers.keys()):
+                    if name.lower() in drop:
+                        del nxt.headers[name]
+            request = nxt
+        raise httpx.TooManyRedirects(f"exceeded {MAX_REDIRECTS} redirects", request=request)
 
     async def get_json(self, url: str, **kwargs: Any) -> HttpResult:
         return await self.request("GET", url, **kwargs)
