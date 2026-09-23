@@ -41,10 +41,14 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    # Auth: a global bearer token applied to *every* GA4GH host. Convenient but
-    # broadcasts the token widely, so prefer per-host tokens (see auth.manager).
-    # Kept None by default; set GA4GH_MCP_BEARER_TOKEN to enable.
-    bearer_token: str | None = Field(default=None)
+    # Auth: a global bearer token, sent only to the hosts listed in ``bearer_hosts``
+    # (GA4GH_MCP_BEARER_HOSTS, comma-separated host or host:port). Tools accept raw URLs
+    # from the model, so an empty allow-list means the global token is never sent.
+    bearer_token: str | None = Field(default=None, repr=False)
+    bearer_hosts: str = ""
+
+    def bearer_host_set(self) -> set[str]:
+        return {h.strip().lower() for h in self.bearer_hosts.split(",") if h.strip()}
 
     # Optional path to a YAML auth config (per-host tokens / OAuth clients).
     # Defaults to <config_home>/config.yaml when present.

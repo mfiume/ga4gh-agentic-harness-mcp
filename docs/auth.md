@@ -8,10 +8,13 @@ bearer tokens (incl. GA4GH Passport/AAI), some use API keys. This server has a
 
 1. Cached **OAuth** token (device-code / client-credentials), auto-refreshed near expiry.
 2. **Static bearer** token for the host: env `GA4GH_MCP_TOKEN_<HOST>`, YAML `hosts.<host>.token`, or runtime `auth_set_token`.
-3. **Global** bearer `GA4GH_MCP_BEARER_TOKEN` (broadcast to all hosts — opt-in only).
+3. **Global** bearer `GA4GH_MCP_BEARER_TOKEN`, only for hosts listed in `GA4GH_MCP_BEARER_HOSTS`.
 4. No auth.
 
-Tokens are only sent to the host they are scoped to (the global token excepted). The
+Tokens are only sent to the host they are scoped to, and only over `https://` (plain
+`http://` is tolerated for `localhost` / `127.0.0.1` / `::1`). Tools accept raw URLs chosen
+by the model, so the global token has an allow-list: when `GA4GH_MCP_BEARER_HOSTS` is empty
+it is never sent. The
 host slug for env vars uppercases and replaces non-alphanumerics: `data.terra.bio` →
 `GA4GH_MCP_TOKEN_DATA_TERRA_BIO`.
 
@@ -20,7 +23,8 @@ host slug for env vars uppercases and replaces non-alphanumerics: `data.terra.bi
 | Variable | Purpose |
 |---|---|
 | `GA4GH_MCP_TOKEN_<HOST>` | Static bearer token for one host |
-| `GA4GH_MCP_BEARER_TOKEN` | Global bearer for all hosts (opt-in) |
+| `GA4GH_MCP_BEARER_TOKEN` | Global bearer, sent only to `GA4GH_MCP_BEARER_HOSTS` |
+| `GA4GH_MCP_BEARER_HOSTS` | Comma-separated hosts (`host` or `host:port`) the global bearer may be sent to |
 | `GA4GH_MCP_CLIENT_ID_<HOST>` | OAuth client_id for device-code / client-credentials |
 | `GA4GH_MCP_CLIENT_SECRET_<HOST>` | OAuth client_secret (if the client is confidential) |
 | `GA4GH_MCP_CONFIG_FILE` | Path to a YAML auth config (default `~/.ga4gh-mcp/config.yaml`) |

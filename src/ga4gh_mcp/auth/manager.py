@@ -6,12 +6,14 @@ Resolution order for outgoing requests (per host):
    if near expiry.
 2. A **static bearer** token configured for that host (env ``GA4GH_MCP_TOKEN_<HOST>``,
    YAML ``hosts.<host>.token``, or a runtime ``auth_set_token``).
-3. The **global** bearer token (``GA4GH_MCP_BEARER_TOKEN``) if set — broadcast to
-   all hosts, so opt-in only.
+3. The **global** bearer token (``GA4GH_MCP_BEARER_TOKEN``), only for hosts in
+   ``GA4GH_MCP_BEARER_HOSTS``.
 4. No auth (public).
 
-Tokens are only ever sent to the host they are scoped to (never leaked across
-hosts, except the explicit global token).
+Tokens are only ever sent to the host they are scoped to, and only over https
+(plain http is tolerated for loopback development servers). Tools accept raw URLs
+chosen by the model, so a token must never follow a URL to a host it was not
+configured for.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 from ..config import Settings
 from ..http import AsyncHttp
@@ -32,6 +35,16 @@ from .store import TokenStore
 logger = logging.getLogger("ga4gh_mcp.auth")
 
 DEVICE_CODE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+
+
+_LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+
+
+def _may_carry_credentials(url: str) -> bool:
+    """Credentials travel only over TLS (plain http is tolerated for loopback dev servers)."""
+    p = urlparse(url if "://" in url else f"https://{url}")
+    scheme = (p.scheme or "").lower()
+    return scheme == "https" or (scheme == "http" and (p.hostname or "").lower() in _LOOPBACK)
 
 
 def host_env_slug(host: str) -> str:
@@ -116,7 +129,7 @@ class AuthManager:
 
     async def resolve_headers(self, url: str) -> dict[str, str]:
         host = host_of(url)
-        if not host:
+        if not host or not _may_carry_credentials(url):
             return {}
         # 1) cached OAuth token (refresh if needed)
         token = await self._valid_oauth_token(host)
@@ -128,8 +141,8 @@ class AuthManager:
         ha = self.host_config(host)
         if ha.token:
             return {"Authorization": f"Bearer {ha.token}"}
-        # 3) global bearer
-        if self._settings.bearer_token:
+        # 3) global bearer, allow-listed hosts only
+        if self._settings.bearer_token and host in self._settings.bearer_host_set():
             return {"Authorization": f"Bearer {self._settings.bearer_token}"}
         return {}
 
@@ -336,6 +349,7 @@ class AuthManager:
         hosts = sorted(set(self._session_tokens) | set(self._store.hosts()) | set(self._yaml_hosts))
         return {
             "global_bearer_configured": bool(self._settings.bearer_token),
+            "global_bearer_hosts": sorted(self._settings.bearer_host_set()),
             "config_file": str(self._settings.resolved_config_file() or ""),
             "hosts": [host_status(h) for h in hosts],
         }
