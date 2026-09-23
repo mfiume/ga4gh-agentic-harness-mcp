@@ -41,6 +41,16 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # Refuse outbound requests (and redirect hops) to loopback, private, link-local (cloud
+    # metadata, 169.254.169.254) and other non-global addresses. None => on for the HTTP/SSE
+    # transports (hosted), off for stdio, where the caller already owns the network.
+    block_private_addresses: bool | None = None
+
+    def blocks_private_addresses(self) -> bool:
+        if self.block_private_addresses is not None:
+            return self.block_private_addresses
+        return self.normalized_transport() != "stdio"
+
     # Auth: a global bearer token, sent only to the hosts listed in ``bearer_hosts``
     # (GA4GH_MCP_BEARER_HOSTS, comma-separated host or host:port). Tools accept raw URLs
     # from the model, so an empty allow-list means the global token is never sent.

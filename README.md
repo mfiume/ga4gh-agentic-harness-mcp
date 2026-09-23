@@ -45,6 +45,11 @@ uv run ga4gh-mcp serve --transport stdio          # for Claude Desktop / Code
 GA4GH_MCP_TRANSPORT=http uv run ga4gh-mcp serve    # HTTP on :8080 (/mcp, /healthz)
 ```
 
+Over HTTP/SSE, outbound requests (and every redirect hop) to loopback, private, link-local
+(including the cloud metadata address 169.254.169.254) and other non-public addresses are
+refused. Set `GA4GH_MCP_BLOCK_PRIVATE_ADDRESSES=false` to reach services on a private network,
+or `true` to apply the same rule under stdio.
+
 With Docker (HTTP):
 
 ```bash

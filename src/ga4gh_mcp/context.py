@@ -35,6 +35,7 @@ class AppContext:
         self.http = AsyncHttp(
             timeout=settings.request_timeout,
             max_retries=settings.max_retries,
+            block_private_addresses=settings.blocks_private_addresses(),
         )
         self.cache = TTLCache(ttl=settings.cache_ttl)
         self.registry = RegistryClient(settings.registry_url, self.http, self.cache)
